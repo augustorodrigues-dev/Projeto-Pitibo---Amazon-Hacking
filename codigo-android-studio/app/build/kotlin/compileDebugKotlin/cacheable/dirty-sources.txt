@@ -1,5 +1,0 @@
-C:\Users\augus\AndroidStudioProjects\TesteApp\app\src\main\java\com\example\aplicaoteste\ui\theme\Theme.kt
-C:\Users\augus\AndroidStudioProjects\TesteApp\app\src\main\java\com\example\aplicaoteste\ui\theme\Color.kt
-C:\Users\augus\AndroidStudioProjects\TesteApp\app\src\main\java\com\example\aplicaoteste\ui\theme\Type.kt
-C:\Users\augus\AndroidStudioProjects\TesteApp\app\src\main\java\com\example\aplicaoteste\CadastroActivity.kt
-C:\Users\augus\AndroidStudioProjects\TesteApp\app\src\main\java\BluetoothActivity.kt
