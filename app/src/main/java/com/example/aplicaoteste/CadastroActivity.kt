@@ -67,8 +67,8 @@ class CadastroActivity : AppCompatActivity() {
             errorTextEmail.visibility = View.VISIBLE
             isValid = false
         } else {
-            e
-            rrorTextEmail.visibility = View.GONE
+
+            errorTextEmail.visibility = View.GONE
         }
 
         val senha = senhaEditText.text.toString()
