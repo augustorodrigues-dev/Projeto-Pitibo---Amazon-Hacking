@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="gcm_defaultSenderId" translatable="false">145536511958</string>
-    <string name="google_api_key" translatable="false">AIzaSyD9o8vYqnIKhn5bzmIoDGdeWY-oILeE1GU</string>
-    <string name="google_app_id" translatable="false">1:145536511958:android:f635c198ecef82061b3e77</string>
-    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyD9o8vYqnIKhn5bzmIoDGdeWY-oILeE1GU</string>
-    <string name="google_storage_bucket" translatable="false">imuana.firebasestorage.app</string>
-    <string name="project_id" translatable="false">imuana</string>
-</resources>
