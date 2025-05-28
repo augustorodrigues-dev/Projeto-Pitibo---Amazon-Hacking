@@ -76,6 +76,15 @@ O ESP32 funciona como um servidor BLE que envia notificações ao aplicativo And
 
 ---
 
+## Extra
+
+### Google Firebase Console
+
+- Integração com Authentication para o cadastro e login de contas dos cuidadores.
+- Uso do Firestore para armazenar as quando e qual notificação foi enviada, visando pesquisas e estudos para o governo.
+
+---
+
 
 # <h1 align="center"> **LINKEDIN DOS INTEGRANTES:**
 
