@@ -18,6 +18,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresPermission
@@ -27,6 +28,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.firebase.firestore.FirebaseFirestore;
 import java.util.*
 
 class BluetoothActivity : AppCompatActivity() {
@@ -60,9 +62,17 @@ class BluetoothActivity : AppCompatActivity() {
     private lateinit var recyclerView: RecyclerView
     private lateinit var botaoScan: Button
 
+    private lateinit var editMensagem: EditText
+    private lateinit var btnAtualizarMensagem: Button
 
     private val devicesList = mutableListOf<BluetoothDevice>()
     private lateinit var devicesAdapter: DevicesAdapter
+
+    private val db = FirebaseFirestore.getInstance()
+
+    private var mensagemPersonalizada: String = "Mensagem padrão do botão 2"
+    private var writeCharacteristic: BluetoothGattCharacteristic? = null
+
 
     private val leScanCallback = object : ScanCallback() {
         @RequiresPermission(Manifest.permission.BLUETOOTH_SCAN)
@@ -70,7 +80,6 @@ class BluetoothActivity : AppCompatActivity() {
             val device = result.device
             val deviceName = device.name ?: "Dispositivo sem nome"
             Log.d(TAG, "Scan result: device name = $deviceName, address = ${device.address}")
-
 
             if (!devicesList.any { it.address == device.address }) {
                 devicesList.add(device)
@@ -108,7 +117,6 @@ class BluetoothActivity : AppCompatActivity() {
                         Toast.makeText(this@BluetoothActivity, "Conectado ao ESP", Toast.LENGTH_SHORT).show()
                     }
 
-
                     val refreshResult = refreshDeviceCache(gatt)
                     Log.d(TAG, "refreshDeviceCache resultado: $refreshResult")
 
@@ -132,7 +140,6 @@ class BluetoothActivity : AppCompatActivity() {
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             Log.d(TAG, "onServicesDiscovered status: $status")
             if (status == BluetoothGatt.GATT_SUCCESS) {
-
 
                 Log.d(TAG, "Listando serviços disponíveis:")
                 gatt.services.forEach { service ->
@@ -162,6 +169,7 @@ class BluetoothActivity : AppCompatActivity() {
                     }
                     return
                 }
+                writeCharacteristic = characteristic
 
                 Log.d(TAG, "Ativando notificações para a característica")
                 if (!gatt.setCharacteristicNotification(characteristic, true)) {
@@ -206,7 +214,21 @@ class BluetoothActivity : AppCompatActivity() {
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             val valorRecebido = characteristic.getStringValue(0)
             Log.d(TAG, "Notificação recebida: $valorRecebido")
-            showNotification("Mensagem BLE", valorRecebido)
+            showNotification("Idoso diz:", valorRecebido)
+            val data = hashMapOf(
+                "mensagem" to valorRecebido,
+                "timestamp" to com.google.firebase.Timestamp.now()
+            )
+
+            db.collection("notificacoes")
+                .add(data)
+                .addOnSuccessListener {
+                    Log.d(TAG, "Notificação salva no Firestore com ID: ${it.id}")
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Erro ao salvar notificação no Firestore", e)
+                }
+
         }
     }
 
@@ -216,10 +238,11 @@ class BluetoothActivity : AppCompatActivity() {
 
         recyclerView = findViewById(R.id.recyclerView)
         botaoScan = findViewById(R.id.botaoScan)
+        editMensagem = findViewById(R.id.editMensagem)
+        btnAtualizarMensagem = findViewById(R.id.btnAtualizarMensagem)
 
         recyclerView.layoutManager = LinearLayoutManager(this)
         devicesAdapter = DevicesAdapter(devicesList) { device ->
-
             if (hasConnectPermission()) {
                 connectToDevice(device)
             } else {
@@ -249,37 +272,72 @@ class BluetoothActivity : AppCompatActivity() {
             }
         }
 
+
+        editMensagem.setText(mensagemPersonalizada)
+
+
+        btnAtualizarMensagem.setOnClickListener {
+            val novaMensagem = editMensagem.text.toString().trim()
+            if (novaMensagem.isNotEmpty()) {
+                enviarMensagemPersonalizada(novaMensagem)
+                Toast.makeText(this, "Mensagem atualizada!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Digite uma mensagem válida", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         createNotificationChannel()
     }
 
-    @RequiresPermission(Manifest.permission.BLUETOOTH_SCAN)
+    override fun onDestroy() {
+        super.onDestroy()
+        bluetoothGatt?.close()
+        bluetoothGatt = null
+    }
+
     private fun startBleScan() {
-        bluetoothLeScanner = bluetoothAdapter.bluetoothLeScanner
         if (scanning) return
 
+        bluetoothLeScanner = bluetoothAdapter.bluetoothLeScanner
         devicesList.clear()
         devicesAdapter.notifyDataSetChanged()
 
         handler.postDelayed({
-            if (scanning) {
-                scanning = false
-                bluetoothLeScanner?.stopScan(leScanCallback)
-                runOnUiThread {
-                    Toast.makeText(this, "Scan finalizado", Toast.LENGTH_SHORT).show()
-                }
+            scanning = false
+            bluetoothLeScanner?.stopScan(leScanCallback)
+            runOnUiThread {
+                Toast.makeText(this, "Scan finalizado", Toast.LENGTH_SHORT).show()
             }
         }, SCAN_PERIOD)
 
         scanning = true
         bluetoothLeScanner?.startScan(leScanCallback)
-        Toast.makeText(this, "Iniciando scan BLE", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Scan iniciado", Toast.LENGTH_SHORT).show()
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private fun connectToDevice(device: BluetoothDevice) {
         bluetoothGatt?.close()
         bluetoothGatt = device.connectGatt(this, false, gattCallback)
-        Toast.makeText(this, "Conectando ao dispositivo ${device.name ?: device.address}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Conectando ao ${device.name ?: device.address}", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun hasPermissions(): Boolean {
+        return REQUIRED_PERMISSIONS.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun hasScanPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+        } else true
+    }
+
+    private fun hasConnectPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        } else true
     }
 
     private fun createNotificationChannel() {
@@ -287,12 +345,10 @@ class BluetoothActivity : AppCompatActivity() {
             val channel = NotificationChannel(
                 NOTIFICATION_CHANNEL_ID,
                 NOTIFICATION_CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = "Canal para notificações BLE"
-            }
-
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                NotificationManager.IMPORTANCE_HIGH
+            )
+            channel.description = "Canal para notificações BLE"
+            val notificationManager = getSystemService(NotificationManager::class.java)
             notificationManager.createNotificationChannel(channel)
         }
     }
@@ -308,10 +364,14 @@ class BluetoothActivity : AppCompatActivity() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        val mensagemParaNotificacao = message
+
+
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification) // Certifique-se de ter esse ícone em res/drawable
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
-            .setContentText(message)
+            .setContentText(mensagemParaNotificacao)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(mensagemParaNotificacao))
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
@@ -320,87 +380,65 @@ class BluetoothActivity : AppCompatActivity() {
         notificationManager.notify(uniqueNotificationId, notification)
     }
 
-    private fun hasPermissions(): Boolean {
-        return REQUIRED_PERMISSIONS.all {
-            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-        }
-    }
 
-    private fun hasScanPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
-        } else {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    private fun hasConnectPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
-        } else {
-            true
-        }
-    }
-
-
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private fun refreshDeviceCache(gatt: BluetoothGatt): Boolean {
-        return try {
+        try {
             val refreshMethod = gatt.javaClass.getMethod("refresh")
-            refreshMethod.invoke(gatt) as Boolean
+            return refreshMethod.invoke(gatt) as Boolean
         } catch (e: Exception) {
-            Log.e(TAG, "Erro ao limpar cache GATT", e)
-            false
+            Log.e(TAG, "refreshDeviceCache falhou", e)
         }
+        return false
     }
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int, permissions: Array<String>, grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_CODE_PERMISSIONS) {
-            if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-                Toast.makeText(this, "Permissões concedidas", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "Permissões negadas", Toast.LENGTH_LONG).show()
-                finish()
-            }
-        }
-    }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        bluetoothGatt?.close()
-        bluetoothGatt = null
-    }
-
-   
-    private class DevicesAdapter(
+    inner class DevicesAdapter(
         private val devices: List<BluetoothDevice>,
         private val onClick: (BluetoothDevice) -> Unit
     ) : RecyclerView.Adapter<DevicesAdapter.DeviceViewHolder>() {
 
+        inner class DeviceViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+            val deviceNameText: TextView = itemView.findViewById(R.id.deviceName)
+            val deviceAddressText: TextView = itemView.findViewById(R.id.deviceAddress)
+        }
+
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): DeviceViewHolder {
-            val view = LayoutInflater.from(parent.context)
-                .inflate(android.R.layout.simple_list_item_2, parent, false)
+            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_bluetooth_device, parent, false)
             return DeviceViewHolder(view)
         }
 
         override fun onBindViewHolder(holder: DeviceViewHolder, position: Int) {
             val device = devices[position]
-            holder.bind(device)
-            holder.itemView.setOnClickListener { onClick(device) }
-        }
-
-        override fun getItemCount(): Int = devices.size
-
-        class DeviceViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-            private val text1: TextView = itemView.findViewById(android.R.id.text1)
-            private val text2: TextView = itemView.findViewById(android.R.id.text2)
-
-            fun bind(device: BluetoothDevice) {
-                text1.text = device.name ?: "Dispositivo sem nome"
-                text2.text = device.address
+            holder.deviceNameText.text = device.name ?: "Dispositivo sem nome"
+            holder.deviceAddressText.text = device.address
+            holder.itemView.setOnClickListener {
+                onClick(device)
             }
         }
+
+        override fun getItemCount() = devices.size
     }
+    fun enviarMensagemPersonalizada(mensagem: String) {
+        if (bluetoothGatt == null || writeCharacteristic == null) {
+            Toast.makeText(this, "Não conectado ao dispositivo", Toast.LENGTH_SHORT).show()
+            Log.e(TAG, "Falha ao enviar mensagem: dispositivo ou característica não conectado")
+            return
+        }
+
+        val caracteristica = writeCharacteristic
+        caracteristica?.value = mensagem.toByteArray(Charsets.UTF_8)
+        caracteristica?.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+
+        val sucesso = bluetoothGatt?.writeCharacteristic(caracteristica) ?: false
+        if (!sucesso) {
+            Toast.makeText(this, "Falha ao enviar mensagem", Toast.LENGTH_SHORT).show()
+            Log.e(TAG, "Falha ao enviar mensagem para o ESP: writeCharacteristic retornou false")
+        } else {
+            Toast.makeText(this, "Mensagem personalizada enviada", Toast.LENGTH_SHORT).show()
+            Log.d(TAG, "Mensagem enviada para o ESP: $mensagem")
+        }
+    }
+
+
 }
