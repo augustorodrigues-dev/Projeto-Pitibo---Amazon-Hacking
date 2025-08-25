@@ -85,7 +85,7 @@ O ESP32 funciona como um servidor BLE que envia notificações ao aplicativo And
 
 ---
 
-## [Vídeo Demonstrativo](https://youtu.be/lmeroR5gzn8?si=jBsKDtVgi9e4Y5mv)
+## [Vídeo Demonstrativo](https://youtu.be/uGAHeOXfepk?si=LAPK9sW1X6Zz4iS2/)
 
 # <h1 align="center"> **LINKEDIN DOS INTEGRANTES:**
 
